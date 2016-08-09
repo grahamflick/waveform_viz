@@ -10,18 +10,13 @@
             font-family: sans-serif;
         }
         h1 {
-            /*margin: auto;*/
             text-align: center;
         }
-        /*#waveform, #barplot {
-            border-radius: 8px;
-            box-shadow: 10px 10px 5px #888888;
-        }*/
         .line {
             fill: none;
             stroke-width: 2;
         }
-        .time,
+        .wfTime,
         .bpTime {
             text-align: center;
             width: 40px;
@@ -40,7 +35,6 @@
         }
         select {
             width: 115px;
-            margin: 0px 5px;
         }
         .barSpanLine {
             stroke: black;
@@ -48,12 +42,11 @@
             stroke-opacity: 0.6
         }
         #condSelectors {
-            position: relative;
-            text-align: center;
-            border: none;
+            text-align: left;
+            margin: auto;
         }
-        .timeButton{
-            margin-top:3px;
+        .timeButton {
+            margin-top: 3px;
         }
     </style>
 </head>
@@ -63,12 +56,12 @@
     <div id="fields"></div>
     <div id="waveform" style="position: relative; display: inline-block;">
         <fieldset id="wfFields">
-            <input type="text" class="time" id="tstart" value="-200"></input>
+            <input type="text" class="wfTime" id="wfTstart" value="-200"></input>
             &ndash;
-            <input type="text" class="time" id="tstop" value="1200"></input>
+            <input type="text" class="wfTime" id="wfTstop" value="1200"></input>
             ms
             <br>
-            <input type="button" class="timeButton" id="applyTime" value="Apply"></input>
+            <input type="button" class="timeButton" id="wfApplyTime" value="Apply"></input>
         </fieldset>
     </div>
     <div id="barplot" style="position: relative; display: inline-block;">
@@ -93,14 +86,16 @@
                 bottom: 40,
                 left: 50
             },
-            width = 800 - margin.left - margin.right,
-            height = 450 - margin.top - margin.bottom;
+            wfWidth = 800 - margin.left - margin.right,
+            wfHeight = 450 - margin.top - margin.bottom,
+            bpWidth = 650 - margin.left - margin.right,
+            bpHeight = 450 - margin.top - margin.bottom;
 
         var x = d3.scaleLinear()
-            .range([0, width]);
+            .range([0, wfWidth]);
 
         var y = d3.scaleLinear()
-            .range([height, 0]);
+            .range([wfHeight, 0]);
 
         var colors = ['#95FFFF', '#FF95E4', '#0B85FF', '#FF5555', '#0B0BFF', '#FF0B0B', '#000094', '#770000'];
         var z = d3.scaleOrdinal(colors);
@@ -120,14 +115,14 @@
             });
 
         var wf = d3.select("#waveform").append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
+            .attr("width", wfWidth + margin.left + margin.right)
+            .attr("height", wfHeight + margin.top + margin.bottom)
             .append("g")
             .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
         wf.append("g")
             .attr("class", "x axis")
-            .attr("transform", "translate(0," + height + ")")
+            .attr("transform", "translate(0," + wfHeight + ")")
             .call(xAxis)
 
         wf.append("g")
@@ -135,24 +130,46 @@
             .call(yAxis);
 
         wf.append("text")
-            .attr("transform", "translate(" + (width / 2) + " ," + (height + 35) + ")")
+            .attr("transform", "translate(" + (wfWidth / 2) + " ," + (wfHeight + 35) + ")")
             .style("text-anchor", "middle")
             .style("font-size", "12px")
             .text("Time after target onset (ms)");
 
         wf.append("text")
-            .attr("y", height / 2)
+            .attr("y", wfHeight / 2)
             .attr("x", -30)
             .attr("id", "ylabel")
-            .attr("transform", "rotate(-90, -30," + height / 2 + ")")
+            .attr("transform", "rotate(-90, -30," + wfHeight / 2 + ")")
             .style("text-anchor", "middle")
             .style("font-size", "12px")
             .text("Activity (dSPM)");
 
-        var allData = [];
-        var factors = ["context", "eventivity", "transitivity"];
-        var allConds = [];
-        var factorLevels = {};
+        var bp = d3.select("#barplot").append("svg")
+            .attr("width", bpWidth + margin.left + margin.right)
+            .attr("height", bpHeight + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        var xOrd = d3.scaleBand()
+            .rangeRound([0, bpWidth])
+            .paddingInner(0.5)
+            .paddingOuter(0.1);
+
+        var bpXAxis = d3.axisBottom(xOrd);
+
+        bp.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + bpHeight + ")")
+            .call(bpXAxis);
+        bp.append("g")
+            .attr("class", "y axis")
+            .call(yAxis);
+
+        var allData = [],
+            factors = ["context", "eventivity", "transitivity"],
+            allConds = [],
+            factorLevels = {};
+
         factors.forEach(function(f) {
             factorLevels[f] = [];
         });
@@ -168,28 +185,48 @@
                     })
                     if (!(allConds.includes(d.cond)))
                         allConds.push(d.cond);
-                    d.values.forEach(function(v){
-                        v.time = parseFloat(v.time) * 1000;
+                    d.values.forEach(function(v) {
+                        v.time = parseInt((parseFloat(v.time) * 1000), 10);
                         v.activity = parseFloat(v.activity);
                     })
                 })
 
                 allData = data;
+
+                var tlims = d3.extent(allData[0].values, function(d) {
+                    return d.time;
+                });
+                d3.selectAll("#wfTstart, #bpTstart")
+                    .property("value", tlims[0]);
+                d3.selectAll("#wfTstop, #bpTstop")
+                    .property("value", tlims[1]);
+
                 z.domain(allConds);
 
                 d3.select("#fields")
-                    .append("fieldset")
+                    .append("table")
                     .attr("id", "condSelectors")
+                    .attr("cellspacing", "5px")
+                    .append("tr")
                     .selectAll(".levelSelect")
                     .data(factors)
-                    .enter().append("select")
+                    .enter().append("td").append("select")
                     .attr("class", "levelSelect")
                     .attr("id", function(d) {
                         return d + "Select"
                     })
                     .on("change", function() {
-                        updateGraph();
+                        updateWaves();
                         updateBars();
+                    });
+
+                d3.select("#fields table")
+                    .insert("tr", ":first-child")
+                    .selectAll(".factorHeader")
+                    .data(factors)
+                    .enter().append("th")
+                    .html(function(d) {
+                        return d.capitalize();
                     });
 
                 factors.forEach(function(f) {
@@ -211,83 +248,80 @@
                     .attr("selected", "selected")
                     .html("All");
 
-                updateGraph();
+                updateWaves();
                 updateBars();
             });
         }
 
+        function subsetData(wfbp) {
 
-        // function loadData() {
-        //     d3.csv("lmSTC_data.csv", convertTime, function(error, data) {
-        //         if (error) throw error;
-        //
-        //         allData = data.columns.slice(1).map(function(cond) {
-        //             var condSplit = cond.split("_");
-        //             condSplit.forEach(function(c, i) {
-        //                 if (!(factorLevels[factors[i]].includes(c))) {
-        //                     factorLevels[factors[i]].push(c);
-        //                 }
-        //             })
-        //             var out = {};
-        //             out["condition"] = cond;
-        //             out[factors[0]] = condSplit[0];
-        //             out[factors[1]] = condSplit[1];
-        //             out[factors[2]] = condSplit[2];
-        //             out["values"] = data.map(function(d) {
-        //                 return {
-        //                     time: d.time,
-        //                     activity: d[cond]
-        //                 };
-        //             });
-        //             return out;
-        //         });
-        //
-        //         z.domain(allData.map(function(c) {
-        //             return c.condition;
-        //         }));
-        //
-        //         d3.select("#fields")
-        //             .append("fieldset")
-        //             .attr("id", "condSelectors")
-        //             .selectAll(".levelSelect")
-        //             .data(factors)
-        //             .enter().append("select")
-        //             .attr("class", "levelSelect")
-        //             .attr("id", function(d) {
-        //                 return d + "Select"
-        //             })
-        //             .on("change", function() {
-        //                 updateGraph();
-        //                 updateBars();
-        //             });
-        //
-        //         factors.forEach(function(f) {
-        //             d3.select("#" + f + "Select")
-        //                 .selectAll("option")
-        //                 .data(factorLevels[f])
-        //                 .enter().append("option")
-        //                 .attr("value", function(d) {
-        //                     return d;
-        //                 })
-        //                 .html(function(d) {
-        //                     return d.capitalize();
-        //                 });
-        //         });
-        //
-        //         d3.selectAll(".levelSelect")
-        //             .insert("option", ":first-child")
-        //             .attr("value", "all")
-        //             .attr("selected", "selected")
-        //             .html("All");
-        //
-        //         updateGraph();
-        //         updateBars();
-        //     });
-        // }
+            var criteria = {};
+            factors.forEach(function(f) {
+                var sel = d3.select("#" + f + "Select").property("value");
+                if (sel == "all") {
+                    criteria[f] = factorLevels[f];
+                } else {
+                    criteria[f] = [sel];
+                }
+            });
 
-        function updateGraph() {
+            var times = [];
+            d3.selectAll("." + wfbp + "Time")
+                .each(function() {
+                    times.push(parseInt(this.value, 10))
+                });
 
-            d3.select("#applyTime")
+            var rows = allData.filter(function(d) {
+                var tf = factors.map(function(f) {
+                    return criteria[f].includes(d[f]);
+                });
+                return tf.every(function(x) {
+                    return x;
+                });
+            });
+
+            var subConds = [];
+            rows.forEach(function(r) {
+                r.valuesToPlot = r.values.filter(function(v) {
+                    return (v.time >= times[0] && v.time <= times[1]);
+                });
+                if (!(subConds.includes(r.cond)))
+                    subConds.push(r.cond);
+            });
+
+            var timesToPlot = rows[0].valuesToPlot.map(function(v) {
+                return v.time;
+            });
+
+            var subData = subConds.map(function(c) {
+                var subRows = rows.filter(function(r) {
+                    return r.cond == c;
+                });
+                var acts = subRows.map(function(r) {
+                    return r.valuesToPlot.map(function(v) {
+                        return v.activity;
+                    })
+                });
+                var means = d3.zip.apply(this, acts).map(function(x) {
+                    return d3.mean(x);
+                });
+                var out = {
+                    cond: c
+                };
+                out.values = timesToPlot.map(function(t, i) {
+                    return {
+                        time: t,
+                        activity: means[i]
+                    }
+                });
+                return out;
+            });
+            return subData;
+        }
+
+        function updateWaves() {
+
+            d3.select("#waveform .timeButton")
                 .style("background-color", "#616161");
 
             var conds = subsetData("wf");
@@ -354,112 +388,9 @@
             drawBarSpanLines();
         }
 
-        function subsetData(wfbp) {
-
-            var category = d3.select("#contextSelect")
-                .property("value");
-            var tr = d3.select("#transitivitySelect")
-                .property("value");
-            var ev = d3.select("#eventivitySelect")
-                .property("value");
-
-            if (category == "all") {
-                category = ["noun", "verb"];
-            } else {
-                category = [category];
-            }
-            if (ev == "all") {
-                ev = ["eventive", "noneventive"];
-            } else {
-                ev = [ev];
-            }
-            if (tr == "all") {
-                tr = ["intransitive", "transitive"];
-            } else {
-                tr = [tr];
-            }
-
-            var times = [];
-            if (wfbp == "wf") {
-                times.push(parseInt(d3.select("#tstart").property("value")));
-                times.push(parseInt(d3.select("#tstop").property("value")));
-            } else {
-                times.push(parseInt(d3.select("#bpTstart").property("value")));
-                times.push(parseInt(d3.select("#bpTstop").property("value")));
-            }
-
-            var rows = allData.filter(function(x) {
-                return category.includes(x.context) && tr.includes(x.transitivity) && ev.includes(x.eventivity);
-            });
-
-            var subConds = [];
-            rows.forEach(function(r) {
-                r.valuesToPlot = r.values.filter(function(v) {
-                    return (v.time >= times[0] && v.time <= times[1]);
-                });
-                if (!(subConds.includes(r.cond)))
-                    subConds.push(r.cond);
-                // c.times = d3.extent(c.valuesToPlot.map(function(v) {return v.time}))
-            });
-
-            var timesToPlot = rows[0].valuesToPlot.map(function(v) { return v.time; });
-
-            var subData = subConds.map(function(c) {
-                var subRows = rows.filter(function(r) { return r.cond == c; });
-                var acts = subRows.map(function(r) { return r.valuesToPlot.map(function(v) { return v.activity; }) });
-                var means = d3.zip.apply(this, acts).map(function(x) { return d3.mean(x); });
-                var out = {cond: c};
-                out.values = timesToPlot.map(function(t, i) { return {time: t, activity: means[i]}});
-                return out;
-            });
-            return subData;
-        }
-
-        loadData();
-
-        d3.select("#applyTime")
-            .on("click", updateGraph);
-        d3.select("#bpApplyTime")
-            .on("click", updateBars);
-        d3.selectAll(".time")
-            .on("change", function() {
-              d3.select("#applyTime")
-                  .style("background-color", "red");
-            });
-        d3.selectAll(".bpTime")
-            .on("change", function() {
-              d3.select("#bpApplyTime")
-                  .style("background-color", "red");
-            });
-
-        /////////////////////////////////////////////////
-        var bpWidth = 650 - margin.left - margin.right,
-            bpHeight = 450 - margin.top - margin.bottom;
-
-        var bp = d3.select("#barplot").append("svg")
-            .attr("width", bpWidth + margin.left + margin.right)
-            .attr("height", bpHeight + margin.top + margin.bottom)
-            .append("g")
-            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-
-        var xOrd = d3.scaleBand()
-            .rangeRound([0, bpWidth])
-            .paddingInner(0.5)
-            .paddingOuter(0.1);
-
-        var bpXAxis = d3.axisBottom(xOrd);
-
-        bp.append("g")
-            .attr("class", "x axis")
-            .attr("transform", "translate(0," + bpHeight + ")")
-            .call(bpXAxis);
-        bp.append("g")
-            .attr("class", "y axis")
-            .call(yAxis);
-
         function updateBars() {
 
-            d3.select("#bpApplyTime")
+            d3.select("#barplot .timeButton")
                 .style("background-color", "#616161");
 
             var conds = subsetData("bp");
@@ -470,8 +401,10 @@
                 }))
             });
 
-            var maxY = d3.max(conds.map(function(c) { return c.barValue }));
-            y.domain([0, maxY+0.4]);
+            var maxY = d3.max(conds.map(function(c) {
+                return c.barValue
+            }));
+            y.domain([0, maxY + 0.4]);
 
             xOrd
                 .domain(conds.map(function(c) {
@@ -524,7 +457,7 @@
                     return y(d.barValue);
                 })
                 .attr("height", function(d) {
-                    return height - y(d.barValue);
+                    return bpHeight - y(d.barValue);
                 });
 
         }
@@ -542,14 +475,35 @@
                 .attr("class", "barSpanLine")
                 .merge(barSpanLines)
                 .transition()
-                .attr("x1", function(d) {return x(d);})
-                .attr("x2", function(d) {return x(d);})
+                .attr("x1", function(d) {
+                    return x(d);
+                })
+                .attr("x2", function(d) {
+                    return x(d);
+                })
                 .attr("y1", 0)
-                .attr("y2", height);
+                .attr("y2", wfHeight);
         }
 
+        loadData();
+
+        d3.select("#wfApplyTime")
+            .on("click", updateWaves);
         d3.select("#bpApplyTime")
-            .on("click", function() {updateBars(); drawBarSpanLines();})
+            .on("click", function() {
+                updateBars();
+                drawBarSpanLines();
+            });
+        d3.selectAll(".wfTime")
+            .on("change", function() {
+                d3.select("#wfApplyTime")
+                    .style("background-color", "red");
+            });
+        d3.selectAll(".bpTime")
+            .on("change", function() {
+                d3.select("#bpApplyTime")
+                    .style("background-color", "red");
+            });
     </script>
 </body>
 
