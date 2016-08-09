@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>lmSTC</title>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+        h1 {
+            /*margin: auto;*/
+            text-align: center;
+        }
+        /*#waveform, #barplot {
+            border-radius: 8px;
+            box-shadow: 10px 10px 5px #888888;
+        }*/
+        .line {
+            fill: none;
+            stroke-width: 2;
+        }
+        .time,
+        .bpTime {
+            text-align: center;
+            width: 40px;
+        }
+        .timeButton {
+            background-color: #616161;
+            color: white;
+            border: none;
+        }
+        #wfFields,
+        #bpFields {
+            position: absolute;
+            border: none;
+            padding-top: 25px;
+            padding-left: 60px;
+        }
+        select {
+            width: 115px;
+            margin: 0px 5px;
+        }
+        .barSpanLine {
+            stroke: black;
+            stroke-dasharray: 5;
+            stroke-opacity: 0.6
+        }
+        #condSelectors {
+            position: relative;
+            text-align: center;
+            border: none;
+        }
+        .timeButton{
+            margin-top:3px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Activity in lmSTC: TrEvCon</h1>
+    <div id="fields"></div>
+    <div id="waveform" style="position: relative; display: inline-block;">
+        <fieldset id="wfFields">
+            <input type="text" class="time" id="tstart" value="-200"></input>
+            &ndash;
+            <input type="text" class="time" id="tstop" value="1200"></input>
+            ms
+            <br>
+            <input type="button" class="timeButton" id="applyTime" value="Apply"></input>
+        </fieldset>
+    </div>
+    <div id="barplot" style="position: relative; display: inline-block;">
+        <fieldset id="bpFields">
+            <input type="text" class="bpTime" id="bpTstart" value="-200"></input>
+            &ndash;
+            <input type="text" class="bpTime" id="bpTstop" value="1200"></input>
+            ms
+            <br>
+            <input type="button" class="timeButton" id="bpApplyTime" value="Apply"></input>
+        </fieldset>
+    </div>
+    <p></p>
+    <script type="text/javascript">
+        String.prototype.capitalize = function() {
+            return this.charAt(0).toUpperCase() + this.slice(1);
+        }
+
+        var margin = {
+                top: 20,
+                right: 20,
+                bottom: 40,
+                left: 50
+            },
+            width = 800 - margin.left - margin.right,
+            height = 450 - margin.top - margin.bottom;
+
+        var x = d3.scaleLinear()
+            .range([0, width]);
+
+        var y = d3.scaleLinear()
+            .range([height, 0]);
+
+        var colors = ['#95FFFF', '#FF95E4', '#0B85FF', '#FF5555', '#0B0BFF', '#FF0B0B', '#000094', '#770000'];
+        var z = d3.scaleOrdinal(colors);
+
+        var xAxis = d3.axisBottom(x)
+            .ticks(5)
+            .tickFormat(d3.format(""));
+
+        var yAxis = d3.axisLeft(y);
+
+        var line = d3.line()
+            .x(function(d) {
+                return x(d.time);
+            })
+            .y(function(d) {
+                return y(d.activity);
+            });
+
+        var wf = d3.select("#waveform").append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        wf.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + height + ")")
+            .call(xAxis)
+
+        wf.append("g")
+            .attr("class", "y axis")
+            .call(yAxis);
+
+        wf.append("text")
+            .attr("transform", "translate(" + (width / 2) + " ," + (height + 35) + ")")
+            .style("text-anchor", "middle")
+            .style("font-size", "12px")
+            .text("Time after target onset (ms)");
+
+        wf.append("text")
+            .attr("y", height / 2)
+            .attr("x", -30)
+            .attr("id", "ylabel")
+            .attr("transform", "rotate(-90, -30," + height / 2 + ")")
+            .style("text-anchor", "middle")
+            .style("font-size", "12px")
+            .text("Activity (dSPM)");
+
+        var allData = [];
+        var factors = ["context", "eventivity", "transitivity"];
+        var allConds = [];
+        var factorLevels = {};
+        factors.forEach(function(f) {
+            factorLevels[f] = [];
+        });
+
+        function loadData() {
+            d3.json("lmSTC_data.json", function(error, data) {
+                if (error) throw error;
+
+                data.forEach(function(d) {
+                    factors.forEach(function(f) {
+                        if (!(factorLevels[f].includes(d[f])))
+                            factorLevels[f].push(d[f]);
+                    })
+                    if (!(allConds.includes(d.cond)))
+                        allConds.push(d.cond);
+                    d.values.forEach(function(v){
+                        v.time = parseFloat(v.time) * 1000;
+                        v.activity = parseFloat(v.activity);
+                    })
+                })
+
+                allData = data;
+                z.domain(allConds);
+
+                d3.select("#fields")
+                    .append("fieldset")
+                    .attr("id", "condSelectors")
+                    .selectAll(".levelSelect")
+                    .data(factors)
+                    .enter().append("select")
+                    .attr("class", "levelSelect")
+                    .attr("id", function(d) {
+                        return d + "Select"
+                    })
+                    .on("change", function() {
+                        updateGraph();
+                        updateBars();
+                    });
+
+                factors.forEach(function(f) {
+                    d3.select("#" + f + "Select")
+                        .selectAll("option")
+                        .data(factorLevels[f])
+                        .enter().append("option")
+                        .attr("value", function(d) {
+                            return d;
+                        })
+                        .html(function(d) {
+                            return d.capitalize();
+                        });
+                });
+
+                d3.selectAll(".levelSelect")
+                    .insert("option", ":first-child")
+                    .attr("value", "all")
+                    .attr("selected", "selected")
+                    .html("All");
+
+                updateGraph();
+                updateBars();
+            });
+        }
+
+
+        // function loadData() {
+        //     d3.csv("lmSTC_data.csv", convertTime, function(error, data) {
+        //         if (error) throw error;
+        //
+        //         allData = data.columns.slice(1).map(function(cond) {
+        //             var condSplit = cond.split("_");
+        //             condSplit.forEach(function(c, i) {
+        //                 if (!(factorLevels[factors[i]].includes(c))) {
+        //                     factorLevels[factors[i]].push(c);
+        //                 }
+        //             })
+        //             var out = {};
+        //             out["condition"] = cond;
+        //             out[factors[0]] = condSplit[0];
+        //             out[factors[1]] = condSplit[1];
+        //             out[factors[2]] = condSplit[2];
+        //             out["values"] = data.map(function(d) {
+        //                 return {
+        //                     time: d.time,
+        //                     activity: d[cond]
+        //                 };
+        //             });
+        //             return out;
+        //         });
+        //
+        //         z.domain(allData.map(function(c) {
+        //             return c.condition;
+        //         }));
+        //
+        //         d3.select("#fields")
+        //             .append("fieldset")
+        //             .attr("id", "condSelectors")
+        //             .selectAll(".levelSelect")
+        //             .data(factors)
+        //             .enter().append("select")
+        //             .attr("class", "levelSelect")
+        //             .attr("id", function(d) {
+        //                 return d + "Select"
+        //             })
+        //             .on("change", function() {
+        //                 updateGraph();
+        //                 updateBars();
+        //             });
+        //
+        //         factors.forEach(function(f) {
+        //             d3.select("#" + f + "Select")
+        //                 .selectAll("option")
+        //                 .data(factorLevels[f])
+        //                 .enter().append("option")
+        //                 .attr("value", function(d) {
+        //                     return d;
+        //                 })
+        //                 .html(function(d) {
+        //                     return d.capitalize();
+        //                 });
+        //         });
+        //
+        //         d3.selectAll(".levelSelect")
+        //             .insert("option", ":first-child")
+        //             .attr("value", "all")
+        //             .attr("selected", "selected")
+        //             .html("All");
+        //
+        //         updateGraph();
+        //         updateBars();
+        //     });
+        // }
+
+        function updateGraph() {
+
+            d3.select("#applyTime")
+                .style("background-color", "#616161");
+
+            var conds = subsetData("wf");
+
+            x.domain(d3.extent(conds[0].values, function(d) {
+                return d.time
+            }));
+
+            wf.select(".x.axis")
+                .call(xAxis);
+
+            y.domain([
+                d3.min(conds, function(c) {
+                    return d3.min(c.values, function(d) {
+                        return d.activity;
+                    });
+                }),
+                d3.max(conds, function(c) {
+                    return d3.max(c.values, function(d) {
+                        return d.activity;
+                    });
+                })
+            ]);
+
+            y.domain([y.domain()[0] - 0.05, y.domain()[1] + 0.05]);
+
+            wf.select(".y.axis")
+                .transition()
+                .duration(500)
+                .call(yAxis);
+
+            var update = wf.selectAll(".line")
+                .data(conds, function(d) {
+                    return d.cond
+                });
+
+            update.exit()
+                .transition()
+                .style("stroke-opacity", 1e-6)
+                .remove();
+
+            update.enter()
+                .append("path")
+                .attr("class", "line")
+                .attr("d", function(d) {
+                    return line(d.values);
+                })
+                .style("stroke", function(d) {
+                    return z(d.cond);
+                })
+                .style("stroke-opacity", 1e-6)
+                .transition()
+                .style("stroke-opacity", 1);
+
+            update
+                .transition()
+                .attr("d", function(d) {
+                    return line(d.values);
+                })
+                .style("stroke", function(d) {
+                    return z(d.cond);
+                })
+
+            drawBarSpanLines();
+        }
+
+        function subsetData(wfbp) {
+
+            var category = d3.select("#contextSelect")
+                .property("value");
+            var tr = d3.select("#transitivitySelect")
+                .property("value");
+            var ev = d3.select("#eventivitySelect")
+                .property("value");
+
+            if (category == "all") {
+                category = ["noun", "verb"];
+            } else {
+                category = [category];
+            }
+            if (ev == "all") {
+                ev = ["eventive", "noneventive"];
+            } else {
+                ev = [ev];
+            }
+            if (tr == "all") {
+                tr = ["intransitive", "transitive"];
+            } else {
+                tr = [tr];
+            }
+
+            var times = [];
+            if (wfbp == "wf") {
+                times.push(parseInt(d3.select("#tstart").property("value")));
+                times.push(parseInt(d3.select("#tstop").property("value")));
+            } else {
+                times.push(parseInt(d3.select("#bpTstart").property("value")));
+                times.push(parseInt(d3.select("#bpTstop").property("value")));
+            }
+
+            var rows = allData.filter(function(x) {
+                return category.includes(x.context) && tr.includes(x.transitivity) && ev.includes(x.eventivity);
+            });
+
+            var subConds = [];
+            rows.forEach(function(r) {
+                r.valuesToPlot = r.values.filter(function(v) {
+                    return (v.time >= times[0] && v.time <= times[1]);
+                });
+                if (!(subConds.includes(r.cond)))
+                    subConds.push(r.cond);
+                // c.times = d3.extent(c.valuesToPlot.map(function(v) {return v.time}))
+            });
+
+            var timesToPlot = rows[0].valuesToPlot.map(function(v) { return v.time; });
+
+            var subData = subConds.map(function(c) {
+                var subRows = rows.filter(function(r) { return r.cond == c; });
+                var acts = subRows.map(function(r) { return r.valuesToPlot.map(function(v) { return v.activity; }) });
+                var means = d3.zip.apply(this, acts).map(function(x) { return d3.mean(x); });
+                var out = {cond: c};
+                out.values = timesToPlot.map(function(t, i) { return {time: t, activity: means[i]}});
+                return out;
+            });
+            return subData;
+        }
+
+        loadData();
+
+        d3.select("#applyTime")
+            .on("click", updateGraph);
+        d3.select("#bpApplyTime")
+            .on("click", updateBars);
+        d3.selectAll(".time")
+            .on("change", function() {
+              d3.select("#applyTime")
+                  .style("background-color", "red");
+            });
+        d3.selectAll(".bpTime")
+            .on("change", function() {
+              d3.select("#bpApplyTime")
+                  .style("background-color", "red");
+            });
+
+        /////////////////////////////////////////////////
+        var bpWidth = 650 - margin.left - margin.right,
+            bpHeight = 450 - margin.top - margin.bottom;
+
+        var bp = d3.select("#barplot").append("svg")
+            .attr("width", bpWidth + margin.left + margin.right)
+            .attr("height", bpHeight + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        var xOrd = d3.scaleBand()
+            .rangeRound([0, bpWidth])
+            .paddingInner(0.5)
+            .paddingOuter(0.1);
+
+        var bpXAxis = d3.axisBottom(xOrd);
+
+        bp.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + bpHeight + ")")
+            .call(bpXAxis);
+        bp.append("g")
+            .attr("class", "y axis")
+            .call(yAxis);
+
+        function updateBars() {
+
+            d3.select("#bpApplyTime")
+                .style("background-color", "#616161");
+
+            var conds = subsetData("bp");
+
+            conds.forEach(function(c) {
+                c.barValue = d3.mean(c.values.map(function(v) {
+                    return v.activity;
+                }))
+            });
+
+            var maxY = d3.max(conds.map(function(c) { return c.barValue }));
+            y.domain([0, maxY+0.4]);
+
+            xOrd
+                .domain(conds.map(function(c) {
+                    return c.cond;
+                }))
+                .rangeRound([0, bpWidth * (conds.length / allConds.length)]);
+
+
+            bp.select(".x.axis")
+                // .transition()
+                .call(bpXAxis)
+                .selectAll(".tick text")
+                .each(function() {
+                    var text = d3.select(this);
+                    var sp = text.text().toUpperCase().split("_");
+                    text.text("");
+                    sp.forEach(function(t) {
+                        text.append("tspan")
+                            .text(t)
+                            .attr("dy", "10")
+                            .attr("x", "0");
+                    })
+                });
+
+            bp.select(".y.axis")
+                .transition()
+                .call(yAxis);
+
+            var update = bp.selectAll(".rect")
+                .data(conds, function(c) {
+                    return c.cond;
+                });
+
+            update.exit()
+                .remove();
+
+            update.enter()
+                .append("rect")
+                .attr("class", "rect")
+                .style("fill", function(d) {
+                    return z(d.cond);
+                })
+                .merge(update)
+                .transition()
+                .attr("width", xOrd.bandwidth())
+                .attr("x", function(d) {
+                    return xOrd(d.cond);
+                })
+                .attr("y", function(d) {
+                    return y(d.barValue);
+                })
+                .attr("height", function(d) {
+                    return height - y(d.barValue);
+                });
+
+        }
+
+        function drawBarSpanLines() {
+            var times = [];
+            d3.selectAll(".bpTime").each(function() {
+                times.push(d3.select(this).property("value"));
+            });
+
+            var barSpanLines = wf.selectAll(".barSpanLine")
+                .data(times);
+
+            barSpanLines.enter().append("line")
+                .attr("class", "barSpanLine")
+                .merge(barSpanLines)
+                .transition()
+                .attr("x1", function(d) {return x(d);})
+                .attr("x2", function(d) {return x(d);})
+                .attr("y1", 0)
+                .attr("y2", height);
+        }
+
+        d3.select("#bpApplyTime")
+            .on("click", function() {updateBars(); drawBarSpanLines();})
+    </script>
+</body>
+
+</html>
