@@ -247,6 +247,11 @@
                     .attr("value", "all")
                     .attr("selected", "selected")
                     .html("All");
+                d3.selectAll(".levelSelect")
+                    .insert("option", ":nth-child(2)")
+                    .attr("value", "collapse")
+                    .html("Collapse");
+
 
                 updateWaves();
                 updateBars();
@@ -260,25 +265,33 @@
                 var sel = d3.select("#" + f + "Select").property("value");
                 if (sel == "all") {
                     criteria[f] = factorLevels[f];
+                } else if (sel == "collapse") {
+                    return;
                 } else {
                     criteria[f] = [sel];
                 }
             });
 
-            var times = [];
+            var times = [],
+                rows, tf;
+
             d3.selectAll("." + wfbp + "Time")
                 .each(function() {
                     times.push(parseInt(this.value, 10))
                 });
 
-            var rows = allData.filter(function(d) {
-                var tf = factors.map(function(f) {
+            if (Object.keys(criteria).length == 0) {
+              rows = allData;
+            } else {
+              rows = allData.filter(function(d) {
+                tf = Object.keys(criteria).map(function(f) {
                     return criteria[f].includes(d[f]);
                 });
                 return tf.every(function(x) {
                     return x;
                 });
             });
+          }
 
             var subConds = [];
             rows.forEach(function(r) {
@@ -293,28 +306,65 @@
                 return v.time;
             });
 
-            var subData = subConds.map(function(c) {
-                var subRows = rows.filter(function(r) {
-                    return r.cond == c;
+            var condGroups = [],
+                oldGroups = [],
+                criterion,
+                subFactors = Object.keys(criteria);
+
+            subFactors.forEach(function(f) {
+              if (condGroups.length == 0) {
+                criteria[f].forEach(function(l) {
+                  criterion = {};
+                  criterion[f] = l;
+                  condGroups.push(criterion);
+              }); } else {
+                oldGroups = condGroups.map(function(x) { return x; });
+                condGroups = [];
+                oldGroups.forEach(function(g) {
+                  criteria[f].forEach(function(l) {
+                    criterion = {};
+                    criterion[f] = l;
+                    Object.keys(g).forEach(function(x) {
+                      criterion[x] = g[x];
+                    });
+                    condGroups.push(criterion);
+                  });
                 });
-                var acts = subRows.map(function(r) {
-                    return r.valuesToPlot.map(function(v) {
-                        return v.activity;
-                    })
+              }
+            });
+
+            var subData, subRows, acts, means, out;
+
+            if (condGroups.length == 0)
+              condGroups = [factorLevels];
+
+            subData = condGroups.map(function(g) {
+              subRows = rows.filter(function(r) {
+                tf = Object.keys(g).map(function(f) {
+                  return g[f].includes(r[f]);
                 });
-                var means = d3.zip.apply(this, acts).map(function(x) {
-                    return d3.mean(x);
-                });
-                var out = {
-                    cond: c
-                };
-                out.values = timesToPlot.map(function(t, i) {
-                    return {
-                        time: t,
-                        activity: means[i]
-                    }
-                });
-                return out;
+                return tf.every(function(x) {return x;});
+              });
+              acts = subRows.map(function(r) {
+                  return r.valuesToPlot.map(function(v) {
+                      return v.activity;
+                  })
+              });
+              means = d3.zip.apply(this, acts).map(function(x) {
+                  return d3.mean(x);
+              });
+              out = {
+                // figure out what the fuck to call the condition for coloring
+                  // cond: c
+                  cond: Object.values(g).join("_")
+              };
+              out.values = timesToPlot.map(function(t, i) {
+                  return {
+                      time: t,
+                      activity: means[i]
+                  };
+              });
+              return out;
             });
             return subData;
         }
@@ -504,6 +554,31 @@
                 d3.select("#bpApplyTime")
                     .style("background-color", "red");
             });
+
+        // d3.select("#waveform svg")
+        //     .on("mousedown", function() {
+        //       var t1 = x.invert(d3.mouse(d3.select("#waveform .x.axis").node())[0]);
+        //       console.log(t1);
+        //       var tsel = wf.select("#tSel").data([t1]);
+        //       tsel.enter().append("rect").attr("id", "tSel").merge(tsel)
+        //         .attr("x", function(d) {return x(d)})
+        //         .attr("width", "1")
+        //         .attr("y", "0")
+        //         .attr("height", wfHeight);
+        //       d3.event.preventDefault();
+        //       var w = d3.select(window)
+        //         .on("mousemove", function(){
+        //           var t = x.invert(d3.mouse(d3.select("#waveform .x.axis").node())[0]);
+        //           if (t > t1) {d3.select("#tSel").attr("width", x(t-t1));}
+        //         })
+        //         .on("mouseup", function() {
+        //           var t2 = x.invert(d3.mouse(d3.select("#waveform .x.axis").node())[0]);
+        //           w.on("mouseup", null).on("mousemove", null);
+        //           console.log(t2);
+        //       });
+        //     });
+
+
     </script>
 </body>
 
