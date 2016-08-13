@@ -9,23 +9,28 @@
         body {
             font-family: sans-serif;
         }
+
         h1 {
             text-align: center;
         }
+
         .line {
             fill: none;
             stroke-width: 2;
         }
+
         .wfTime,
         .bpTime {
             text-align: center;
             width: 40px;
         }
+
         .timeButton {
             background-color: #616161;
             color: white;
             border: none;
         }
+
         #wfFields,
         #bpFields {
             position: absolute;
@@ -33,18 +38,22 @@
             padding-top: 25px;
             padding-left: 60px;
         }
+
         select {
             width: 115px;
         }
+
         .barSpanLine {
             stroke: black;
             stroke-dasharray: 5;
             stroke-opacity: 0.6
         }
+
         #condSelectors {
             text-align: left;
             margin: auto;
         }
+
         .timeButton {
             margin-top: 3px;
         }
@@ -281,17 +290,17 @@
                 });
 
             if (Object.keys(criteria).length == 0) {
-              rows = allData;
+                rows = allData;
             } else {
-              rows = allData.filter(function(d) {
-                tf = Object.keys(criteria).map(function(f) {
-                    return criteria[f].includes(d[f]);
+                rows = allData.filter(function(d) {
+                    tf = Object.keys(criteria).map(function(f) {
+                        return criteria[f].includes(d[f]);
+                    });
+                    return tf.every(function(x) {
+                        return x;
+                    });
                 });
-                return tf.every(function(x) {
-                    return x;
-                });
-            });
-          }
+            }
 
             var subConds = [];
             rows.forEach(function(r) {
@@ -312,59 +321,62 @@
                 subFactors = Object.keys(criteria);
 
             subFactors.forEach(function(f) {
-              if (condGroups.length == 0) {
-                criteria[f].forEach(function(l) {
-                  criterion = {};
-                  criterion[f] = l;
-                  condGroups.push(criterion);
-              }); } else {
-                oldGroups = condGroups.map(function(x) { return x; });
-                condGroups = [];
-                oldGroups.forEach(function(g) {
-                  criteria[f].forEach(function(l) {
-                    criterion = {};
-                    criterion[f] = l;
-                    Object.keys(g).forEach(function(x) {
-                      criterion[x] = g[x];
+                if (condGroups.length == 0) {
+                    criteria[f].forEach(function(l) {
+                        criterion = {};
+                        criterion[f] = l;
+                        condGroups.push(criterion);
                     });
-                    condGroups.push(criterion);
-                  });
-                });
-              }
+                } else {
+                    oldGroups = condGroups.map(function(x) {
+                        return x;
+                    });
+                    condGroups = [];
+                    oldGroups.forEach(function(g) {
+                        criteria[f].forEach(function(l) {
+                            criterion = {};
+                            criterion[f] = l;
+                            Object.keys(g).forEach(function(x) {
+                                criterion[x] = g[x];
+                            });
+                            condGroups.push(criterion);
+                        });
+                    });
+                }
             });
 
             var subData, subRows, acts, means, out;
 
             if (condGroups.length == 0)
-              condGroups = [factorLevels];
+                condGroups = [factorLevels];
 
             subData = condGroups.map(function(g) {
-              subRows = rows.filter(function(r) {
-                tf = Object.keys(g).map(function(f) {
-                  return g[f].includes(r[f]);
+                subRows = rows.filter(function(r) {
+                    tf = Object.keys(g).map(function(f) {
+                        return g[f].includes(r[f]);
+                    });
+                    return tf.every(function(x) {
+                        return x;
+                    });
                 });
-                return tf.every(function(x) {return x;});
-              });
-              acts = subRows.map(function(r) {
-                  return r.valuesToPlot.map(function(v) {
-                      return v.activity;
-                  })
-              });
-              means = d3.zip.apply(this, acts).map(function(x) {
-                  return d3.mean(x);
-              });
-              out = {
-                // figure out what the fuck to call the condition for coloring
-                  // cond: c
-                  cond: Object.values(g).join("_")
-              };
-              out.values = timesToPlot.map(function(t, i) {
-                  return {
-                      time: t,
-                      activity: means[i]
-                  };
-              });
-              return out;
+                acts = subRows.map(function(r) {
+                    return r.valuesToPlot.map(function(v) {
+                        return v.activity;
+                    })
+                });
+                means = d3.zip.apply(this, acts).map(function(x) {
+                    return d3.mean(x);
+                });
+                out = {
+                    cond: Object.values(g).join("_")
+                };
+                out.values = timesToPlot.map(function(t, i) {
+                    return {
+                        time: t,
+                        activity: means[i]
+                    };
+                });
+                return out;
             });
             return subData;
         }
@@ -498,7 +510,7 @@
                     return z(d.cond);
                 })
                 .merge(update)
-                .transition()
+                // .transition()
                 .attr("width", xOrd.bandwidth())
                 .attr("x", function(d) {
                     return xOrd(d.cond);
@@ -555,30 +567,49 @@
                     .style("background-color", "red");
             });
 
-        // d3.select("#waveform svg")
-        //     .on("mousedown", function() {
-        //       var t1 = x.invert(d3.mouse(d3.select("#waveform .x.axis").node())[0]);
-        //       console.log(t1);
-        //       var tsel = wf.select("#tSel").data([t1]);
-        //       tsel.enter().append("rect").attr("id", "tSel").merge(tsel)
-        //         .attr("x", function(d) {return x(d)})
-        //         .attr("width", "1")
-        //         .attr("y", "0")
-        //         .attr("height", wfHeight);
-        //       d3.event.preventDefault();
-        //       var w = d3.select(window)
-        //         .on("mousemove", function(){
-        //           var t = x.invert(d3.mouse(d3.select("#waveform .x.axis").node())[0]);
-        //           if (t > t1) {d3.select("#tSel").attr("width", x(t-t1));}
-        //         })
-        //         .on("mouseup", function() {
-        //           var t2 = x.invert(d3.mouse(d3.select("#waveform .x.axis").node())[0]);
-        //           w.on("mouseup", null).on("mousemove", null);
-        //           console.log(t2);
-        //       });
-        //     });
-
-
+        d3.select("#waveform svg")
+            .on("mousedown", function() {
+                var t1 = Math.round(x.invert(d3.mouse(d3.select("#waveform .x.axis").node())[0]));
+                var tSel = wf.append("rect")
+                    .attr("id", "tSel")
+                    .style("fill", "#a6a6a6")
+                    .style("fill-opacity", 0.3)
+                    .attr("x", x(t1))
+                    .attr("width", "1")
+                    .attr("y", "0")
+                    .attr("height", wfHeight);
+                d3.event.preventDefault();
+                var w = d3.select(window)
+                    .on("mousemove", function() {
+                        var t = Math.round(x.invert(d3.mouse(d3.select("#waveform .x.axis").node())[0]));
+                        if (t > t1) {
+                            tSel.attr("width", x(t) - x(t1));
+                        } else {
+                            tSel.attr("x", x(t)).attr("width", x(t1) - x(t));
+                        }
+                    })
+                    .on("mouseup", function() {
+                        var t2 = Math.round(x.invert(d3.mouse(d3.select("#waveform .x.axis").node())[0]));
+                        var tLims = [];
+                        d3.selectAll(".wfTime").each(function() {
+                            tLims.push(parseInt(d3.select(this).property("value")));
+                        });
+                        if (t1 > t2) {
+                            var times = [t2, t1];
+                        } else {
+                            var times = [t1, t2];
+                        }
+                        if (times[0] < tLims[0]) times[0] = tLims[0];
+                        if (times[1] > tLims[1]) times[1] = tLims[1];
+                        d3.selectAll(".bpTime").data(times).property("value", function(d) {
+                            return d;
+                        });
+                        updateBars();
+                        drawBarSpanLines();
+                        tSel.remove();
+                        w.on("mouseup", null).on("mousemove", null);
+                    });
+            });
     </script>
 </body>
 
